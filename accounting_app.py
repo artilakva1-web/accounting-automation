@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 import difflib
-import os
 
 st.set_page_config(page_title="Accounting By A/C", layout="wide")
 
 # --- მონაცემთა გასუფთავების ფუნქცია ---
 def safe_float(value):
     try:
+        # აშორებს ყველაფერს ციფრისა და წერტილის გარდა (მაგ: (1,200.50) -> 1200.50)
         cleaned = str(value).replace('(', '').replace(')', '').replace(',', '').strip()
         return float(cleaned)
     except:
@@ -29,7 +29,7 @@ def match_phone(row, phone_df):
     if matches.empty: return "ნომერი ვერ მოიძებნა", ""
     if len(matches) == 1: 
         sh_val = str(matches.iloc[0].get('შენიშვნა', ''))
-        return matches.iloc[0]['ტელეფონი'], "" if str(sh_val).lower() == 'nan' else sh_val
+        return matches.iloc[0]['ტელეფონი'], "" if sh_val.lower() == 'nan' else sh_val
     
     for length in [11, 7, 4]:
         if len(p_nomeri) >= length:
@@ -37,26 +37,19 @@ def match_phone(row, phone_df):
             sub_match = matches[matches['პირადი ნომერი'].astype(str).str.endswith(suffix)]
             if not sub_match.empty:
                 sh_val = str(sub_match.iloc[0].get('შენიშვნა', ''))
-                return sub_match.iloc[0]['ტელეფონი'], "" if str(sh_val).lower() == 'nan' else sh_val
+                return sub_match.iloc[0]['ტელეფონი'], "" if sh_val.lower() == 'nan' else sh_val
     return "დუბლიკატია", ""
 
 # --- PDF გენერატორი ---
 def generate_pdf(df):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    
-    # ფონტის გზის განსაზღვრა (Streamlit Cloud-ისთვის)
-    current_dir = os.path.dirname(__file__)
-    font_path = os.path.join(current_dir, 'dejavu-sans.book.ttf')
-
     try:
-        # uni=True აუცილებელია ქართული სიმბოლოებისთვის
-        pdf.add_font('DejaVu', '', font_path, uni=True)
+        pdf.add_font('DejaVu', '', 'dejavu-sans.book.ttf')
         pdf.set_font('DejaVu', size=10)
-    except:
-        pdf.set_font('Arial', size=10)
+    except: pdf.set_font('Arial', size=10)
 
-    # 1. პროექტების მიხედვით დაჯგუფება
+    # 1. ჯერ ვამზადებთ პროექტების მიხედვით დაჯგუფებულ მონაცემებს
     summary_data = []
     for proj in df['პროექტის დასახელება'].unique():
         sub = df[df['პროექტის დასახელება'] == proj]
@@ -65,6 +58,8 @@ def generate_pdf(df):
         summary_data.append({'პროექტი': proj, 'ვალი': p_debt, 'ავანსი': p_adv})
     
     sum_df = pd.DataFrame(summary_data)
+    
+    # ზუსტი საერთო ჯამები (ვიღებთ უკვე დაჯამებული პროექტებიდან)
     total_debts = sum_df['ვალი'].sum()
     total_advances = sum_df['ავანსი'].sum()
 
@@ -95,7 +90,7 @@ def generate_pdf(df):
         pdf.cell(55, 10, f"{row['ვალი']:,.2f}", 1, 0, 'R')
         pdf.cell(55, 10, f"({row['ავანსი']:,.2f})", 1, 1, 'R')
 
-    # 2. დეტალური გვერდები
+    # 2. დეტალური გვერდები (აქ კოდი უცვლელია, რადგან მოგეწონათ)
     for proj in df['პროექტის დასახელება'].unique():
         pdf.add_page()
         pdf.set_font('DejaVu', size=14)
@@ -157,6 +152,7 @@ if f1 and f2:
     with st.spinner('მუშავდება...'):
         df1[['ტელეფონი', 'შენიშვნა']] = df1.apply(lambda row: pd.Series(match_phone(row, df2)), axis=1)
 
+    # --- პრევიუ ეკრანზე ---
     st.markdown("---")
     st.subheader("📋 მონაცემების პრევიუ")
     for p in df1['პროექტის დასახელება'].unique():
@@ -164,14 +160,7 @@ if f1 and f2:
             p_df = df1[df1['პროექტის დასახელება'] == p]
             st.dataframe(p_df[['სახელი გვარი', 'პირადი ნომერი', 'ვალები', 'ავანსები', 'ტელეფონი', 'შენიშვნა']])
 
+    # --- PDF გენერირება ---
     if st.button("🚀 PDF დოკუმენტის გენერირება"):
-        try:
-            pdf_bytes = generate_pdf(df1)
-            st.download_button(
-                label="📥 გადმოწერეთ PDF",
-                data=bytes(pdf_bytes),
-                file_name="Report_AC.pdf",
-                mime="application/pdf"
-            )
-        except Exception as e:
-            st.error(f"PDF-ის შექმნისას დაფიქსირდა შეცდომა: {e}")
+        pdf_bytes = generate_pdf(df1)
+        st.download_button("📥 გადმოწერეთ PDF", data=bytes(pdf_bytes), file_name="Report_AC.pdf", mime="application/pdf")
