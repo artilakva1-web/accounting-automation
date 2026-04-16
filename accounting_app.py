@@ -302,7 +302,7 @@ def generate_pdf(df):
     # fpdf2-ში bytes() აღარ გჭირდებათ
     return pdf.output()
 
-        self.set_fill_color(*NAVY)
+    self.set_fill_color(*NAVY)
     self.rect(0, 0, 210, 12, 'F')
 
         self._sf(7)
