@@ -66,7 +66,7 @@ def generate_pdf(df):
     # საწყისი გვერდი
     pdf.add_page()
     pdf.set_font('DejaVu', size=16)
-    pdf.cell(0, 15, "ვალები-ავანსები - By K A/C", ln=True, align='C')
+    pdf.cell(0, 15, "ბუღალტრული შეჯამება - By A/C", ln=True, align='C')
     pdf.ln(5)
     
     pdf.set_fill_color(245, 245, 245)
