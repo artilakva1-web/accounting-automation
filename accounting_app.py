@@ -544,37 +544,66 @@ class ProfessionalPDF(FPDF):
             self.set_text_color(*EMERALD_LIGHT)
             self.cell(col_w2[2], 6.5, f"({p_adv:,.2f})", 1, 1, 'R', True)
 
+# 1. დარწმუნდით, რომ იმპორტი ასეთია:
+from fpdf import FPDF
+
+# 2. განაახლეთ ProfessionalPDF კლასის __init__ და generate_pdf ფუნქცია:
+
+class ProfessionalPDF(FPDF):
+    def __init__(self, report_date, total_debts, total_advances):
+        # fpdf2-ში ვიყენებთ პირდაპირ ინიციალიზაციას
+        super().__init__('P', 'mm', 'A4')
+        self.report_date = report_date
+        self.total_debts = total_debts
+        self.total_adv = total_advances
+        
+        self.set_margins(15, 15, 15)
+        self.set_auto_page_break(auto=True, margin=22)
+        
+        # ქართული შრიფტის დამატება - ფაილი dejavu-sans.book.ttf უნდა გქონდეთ საქაღალდეში
+        try:
+            self.add_font('DejaVu', '', 'dejavu-sans.book.ttf')
+            self.add_font('DejaVu', 'B', 'dejavu-sans.book.ttf') 
+            self._font = 'DejaVu'
+        except:
+            # თუ ფონტი ვერ იპოვა, აპლიკაცია რომ არ გაითიშოს
+            self._font = 'Arial'
+
+    # ... (დანარჩენი მეთოდები draw_dashboard და ა.შ. რჩება იგივე)
 
 def generate_pdf(df):
-    report_date   = datetime.now().strftime('%d %B %Y  |  %H:%M')
+    report_date = datetime.now().strftime('%d %B %Y | %H:%M')
 
     summary_data = []
     for proj in df['პროექტის დასახელება'].unique():
         sub = df[df['პროექტის დასახელება'] == proj]
         summary_data.append({
-            'პროექტი': proj,
-            'ვალი':    sub['ვალები'].sum(),
-            'ავანსი':  sub['ავანსები'].sum(),
+            'პროექტი': str(proj), # ვამატებთ str() კონვერტაციას
+            'ვალი': sub['ვალები'].sum(),
+            'ავანსი': sub['ავანსები'].sum(),
         })
     sum_df = pd.DataFrame(summary_data)
 
-    total_debts    = sum_df['ვალი'].sum()
+    total_debts = sum_df['ვალი'].sum()
     total_advances = sum_df['ავანსი'].sum()
-    project_count  = len(sum_df)
+    project_count = len(sum_df)
 
+    # ობიექტის შექმნა
     pdf = ProfessionalPDF(report_date, total_debts, total_advances)
 
-    # Dashboard
+    # Dashboard-ის დახატვა
     pdf.draw_dashboard(sum_df, project_count)
 
-    # One page per project
+    # თითოეული პროექტის გვერდი
     for proj in df['პროექტის დასახელება'].unique():
-        proj_df   = df[df['პროექტის დასახელება'] == proj]
-        debtors   = proj_df[proj_df['ვალები']  > 0].copy()
-        advances  = proj_df[proj_df['ავანსები'] > 0].copy()
-        pdf.draw_project_page(proj, debtors, advances)
+        proj_df = df[df['პროექტის დასახელება'] == proj]
+        debtors = proj_df[proj_df['ვალები'] > 0].copy()
+        advances = proj_df[proj_df['ავანსები'] > 0].copy()
+        pdf.draw_project_page(str(proj), debtors, advances)
 
-    return bytes(pdf.output())
+    # ყველაზე მნიშვნელოვანი ცვლილება აქ არის:
+    # fpdf2-ში output() პირდაპირ აბრუნებს bytearray-ს, bytes() აღარ გჭირდებათ
+    return pdf.output()
 
 
 # ─────────────────────────────────────────────
