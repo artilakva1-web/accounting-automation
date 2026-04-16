@@ -1,4 +1,4 @@
 streamlit
 pandas
-fpdf
-difflib
+fpdf2
+plotly
