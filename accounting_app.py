@@ -273,7 +273,7 @@ class ProfessionalPDF(FPDF):
         self.add_page()
         # პროექტის გვერდის კოდი...
 
-    def generate_pdf(df):
+def generate_pdf(df):
     report_date = datetime.now().strftime('%d %B %Y | %H:%M')
     
     # მონაცემების მომზადება
