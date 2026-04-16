@@ -40,24 +40,35 @@ def match_phone(row, phone_df):
                 return sub_match.iloc[0]['ტელეფონი'], "" if sh_val.lower() == 'nan' else sh_val
     return "დუბლიკატია", ""
 
-# --- PDF გენერატორი ---
+import os
+from fpdf import FPDF
+
 def generate_pdf(df):
+    # ვპოულობთ ზუსტ მისამართს სერვერზე
+    current_dir = os.path.dirname(__file__)
+    font_path = os.path.join(current_dir, 'dejavu-sans.book.ttf')
+    
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
-    try:
-        pdf.add_font('DejaVu', '', 'dejavu-sans.book.ttf')
-        pdf.set_font('DejaVu', size=10)
-    except: pdf.set_font('Arial', size=10)
-
-    # 1. ჯერ ვამზადებთ პროექტების მიხედვით დაჯგუფებულ მონაცემებს
-    summary_data = []
-    for proj in df['პროექტის დასახელება'].unique():
-        sub = df[df['პროექტის დასახელება'] == proj]
-        p_debt = sub['ვალები'].sum()
-        p_adv = sub['ავანსები'].sum()
-        summary_data.append({'პროექტი': proj, 'ვალი': p_debt, 'ავანსი': p_adv})
+    pdf.add_page()
     
-    sum_df = pd.DataFrame(summary_data)
+    # ვამოწმებთ არსებობს თუ არა ფაილი
+    if os.path.exists(font_path):
+        try:
+            # აუცილებელია uni=True ქართული უნიკოდისთვის
+            pdf.add_font('DejaVu', '', font_path, uni=True)
+            pdf.set_font('DejaVu', size=10)
+        except Exception as e:
+            st.error(f"ფონტის ჩატვირთვის შეცდომა: {e}")
+            pdf.set_font('Arial', size=10)
+    else:
+        st.error(f"ფაილი ვერ მოიძებნა ამ მისამართზე: {font_path}")
+        pdf.set_font('Arial', size=10)
+
+    # ... თქვენი დანარჩენი კოდი ...
+    
+    # აუცილებელია ბაიტებად დაბრუნება Streamlit-ისთვის
+    return bytes(pdf.output())
     
     # ზუსტი საერთო ჯამები (ვიღებთ უკვე დაჯამებული პროექტებიდან)
     total_debts = sum_df['ვალი'].sum()
