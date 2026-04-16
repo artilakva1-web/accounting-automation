@@ -245,29 +245,62 @@ def _draw_color(pdf, rgb):
 
 
 class ProfessionalPDF(FPDF):
-    """Custom FPDF subclass with header/footer."""
-
     def __init__(self, report_date, total_debts, total_advances):
+        # fpdf2-ის სწორი ინიციალიზაცია
         super().__init__('P', 'mm', 'A4')
-        self.report_date  = report_date
-        self.total_debts  = total_debts
-        self.total_adv    = total_advances
+        self.report_date = report_date
+        self.total_debts = total_debts
+        self.total_adv = total_advances
         self.set_margins(15, 15, 15)
         self.set_auto_page_break(auto=True, margin=22)
+        
         try:
-            self.add_font('DejaVu', '',  'dejavu-sans.book.ttf')
-            self.add_font('DejaVu', 'B', 'dejavu-sans.book.ttf')  # fallback bold
+            # აუცილებლად გქონდეთ ეს ფაილი GitHub-ზე!
+            self.add_font('DejaVu', '', 'dejavu-sans.book.ttf')
             self._font = 'DejaVu'
         except:
             self._font = 'Arial'
 
-    def _sf(self, size=10, bold=False):
-        style = 'B' if bold else ''
-        self.set_font(self._font, style, size)
+    def draw_dashboard(self, summary_df, project_count):
+        self.add_page()
+        # აქ მოდის თქვენი დეშბორდის ხატვის კოდი...
+        # (დარწმუნდით რომ ეს ფუნქცია კლასის შიგნითაა შეწეული)
+        self.set_fill_color(13, 27, 42) # NAVY
+        self.rect(0, 0, 210, 297, 'F')
+        # ... დანარჩენი ვიზუალი ...
 
-    def header(self):
-        if self.page_no() == 1:
-            return          # dashboard page has its own hero
+    def draw_project_page(self, proj_name, debtors_df, advances_df):
+        self.add_page()
+        # პროექტის გვერდის კოდი...
+
+    def generate_pdf(df):
+    report_date = datetime.now().strftime('%d %B %Y | %H:%M')
+    
+    # მონაცემების მომზადება
+    summary_data = []
+    for proj in df['პროექტის დასახელება'].unique():
+        sub = df[df['პროექტის დასახელება'] == proj]
+        summary_data.append({
+            'პროექტი': str(proj),
+            'ვალი': sub['ვალები'].sum(),
+            'ავანსი': sub['ავანსები'].sum(),
+        })
+    sum_df = pd.DataFrame(summary_data)
+
+    # ობიექტის შექმნა
+    pdf = ProfessionalPDF(report_date, sum_df['ვალი'].sum(), sum_df['ავანსი'].sum())
+    
+    # მეთოდის გამოძახება
+    pdf.draw_dashboard(sum_df, len(sum_df))
+
+    for proj in df['პროექტის დასახელება'].unique():
+        proj_df = df[df['პროექტის დასახელება'] == proj]
+        pdf.draw_project_page(str(proj), 
+                              proj_df[proj_df['ვალები'] > 0], 
+                              proj_df[proj_df['ავანსები'] > 0])
+
+    # fpdf2-ში bytes() აღარ გჭირდებათ
+    return pdf.output()
 
         # Thin top bar
         self.set_fill_color(*NAVY)
