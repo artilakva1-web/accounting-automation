@@ -3,141 +3,154 @@ import pandas as pd
 from fpdf import FPDF
 import io
 import re
-import difflib # სახელების მსგავსების შესამოწმებლად
+import difflib
 
-# გვერდის კონფიგურაცია
-st.set_page_config(page_title="Accounting Automation By A/C", layout="wide")
+st.set_page_config(page_title="Accounting By A/C", layout="wide")
 
 def is_name_similar(name1, name2):
-    """ამოწმებს სახელების მსგავსებას (ნებადართულია 1-2 სიმბოლოს სხვაობა)"""
-    name1 = str(name1).strip().lower()
-    name2 = str(name2).strip().lower()
-    # SequenceMatcher ითვლის მსგავსების კოეფიციენტს (0-დან 1-მდე)
-    ratio = difflib.SequenceMatcher(None, name1, name2).ratio()
-    return ratio > 0.85 # 0.85 ნიშნავს დაახლოებით 1-2 სიმბოლოს სხვაობას
+    name1, name2 = str(name1).strip().lower(), str(name2).strip().lower()
+    return difflib.SequenceMatcher(None, name1, name2).ratio() > 0.85
 
 def match_phone(row, phone_df):
-    """იერარქიული ძებნა: სახელი (მსგავსი) + ID (11 -> 7 -> 4)"""
+    # მხოლოდ მევალეებისთვის ვეძებთ ნომერს
+    if row['ვალები'] <= 0:
+        return "", ""
+        
     p_nomeri = str(row['პირადი ნომერი']).strip()
     target_name = str(row['სახელი გვარი']).strip()
     
-    # ვფილტრავთ იმ ხალხს, ვისი სახელიც ჰგავს სამიზნე სახელს
     potential_matches = phone_df[phone_df['სახელი გვარი'].apply(lambda x: is_name_similar(x, target_name))]
     
     if potential_matches.empty:
         return "სახელი ვერ მოიძებნა", ""
 
-    # ახლა ვამოწმებთ პირად ნომრებს პოტენციურ დამთხვევებში
-    # 1. 11 ნიშნა (ზუსტი)
-    match = potential_matches[potential_matches['პირადი ნომერი'].astype(str).str.strip() == p_nomeri]
-    if not match.empty:
-        return match.iloc[0]['ტელეფონი'], match.iloc[0].get('შენიშვნა', '')
-
-    # 2. ბოლო 7 ნიშნა
-    if len(p_nomeri) >= 7:
-        last_7 = p_nomeri[-7:]
-        match = potential_matches[potential_matches['პირადი ნომერი'].astype(str).str.endswith(last_7)]
-        if not match.empty:
-            return match.iloc[0]['ტელეფონი'], match.iloc[0].get('შენიშვნა', '')
-
-    # 3. ბოლო 4 ნიშნა
-    if len(p_nomeri) >= 4:
-        last_4 = p_nomeri[-4:]
-        match = potential_matches[potential_matches['პირადი ნომერი'].astype(str).str.endswith(last_4)]
-        if not match.empty:
-            return match.iloc[0]['ტელეფონი'], match.iloc[0].get('შენიშვნა', '')
-
+    # იერარქია: 11 -> 7 -> 4
+    for length in [11, 7, 4]:
+        if len(p_nomeri) >= length:
+            suffix = p_nomeri[-length:]
+            match = potential_matches[potential_matches['პირადი ნომერი'].astype(str).str.endswith(suffix)]
+            if not match.empty:
+                return match.iloc[0]['ტელეფონი'], match.iloc[0].get('შენიშვნა', '')
+                
     return "ნომერი არ მოიძებნა", ""
 
-def generate_pdf(df, totals):
+def generate_pdf(df, summary_data):
     pdf = FPDF()
-    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
     
-    # ფონტის რეგისტრაცია
+    # ფონტის დამატება
     try:
         pdf.add_font('DejaVu', '', 'dejavu-sans.book.ttf')
-        pdf.set_font('DejaVu', size=12)
+        pdf.set_font('DejaVu', size=11)
     except:
-        st.error("ფონტი 'dejavu-sans.book.ttf' ვერ მოიძებნა!")
-        pdf.set_font('Arial', size=12)
+        pdf.set_font('Arial', size=11)
 
-    # საწყისი გვერდი: შეჯამება
-    pdf.cell(200, 10, txt="ბუღალტრული ანგარიში - By A/C", ln=True, align='C')
+    # გვერდი 1: შეჯამება
+    pdf.add_page()
+    pdf.set_font('DejaVu', size=16)
+    pdf.cell(0, 10, "ბუღალტრული ანგარიში - By A/C", ln=True, align='C')
+    pdf.set_font('DejaVu', size=11)
+    pdf.cell(0, 10, f"თარიღი: {pd.Timestamp.now().strftime('%Y-%m-%d')}", ln=True, align='C')
     pdf.ln(10)
-    
+
     # შეჯამების ცხრილი
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(80, 10, "პროექტი", 1, 0, 'C', True)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.cell(80, 10, "პროექტის დასახელება", 1, 0, 'C', True)
     pdf.cell(55, 10, "ვალები (ჯამი)", 1, 0, 'C', True)
     pdf.cell(55, 10, "ავანსები (ჯამი)", 1, 1, 'C', True)
     
-    for proj, data in totals.items():
-        pdf.cell(80, 10, str(proj), 1)
-        pdf.cell(55, 10, f"{data['debts']:.2f}", 1)
-        pdf.cell(55, 10, f"{data['adv']:.2f}", 1, 1)
+    for proj, stats in summary_data.items():
+        pdf.cell(80, 8, str(proj), 1)
+        pdf.cell(55, 8, f"{stats['debts']:,.2d}", 1)
+        pdf.cell(55, 8, f"{stats['adv']:,.2d}", 1, 1)
 
-    # პროექტების მიხედვით დაყოფა
-    for project in df['პროექტის დასახელება'].unique():
+    # დეტალური გვერდები პროექტების მიხედვით
+    projects = df['პროექტის დასახელება'].unique()
+    for proj_name in projects:
         pdf.add_page()
+        proj_df = df[df['პროექტის დასახელება'] == proj_name]
+        
         pdf.set_font('DejaVu', size=14)
-        pdf.cell(200, 10, txt=f"პროექტი: {project}", ln=True)
-        pdf.set_font('DejaVu', size=10)
-        
-        proj_df = df[df['პროექტის დასახელება'] == project]
-        
-        # მევალეები
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, f"პროექტი: {proj_name}", ln=True)
+        pdf.ln(3)
+
+        # 1. მევალეები (წითელი ცხრილი)
         debtors = proj_df[proj_df['ვალები'] > 0]
         if not debtors.empty:
-            pdf.ln(5)
+            pdf.set_font('DejaVu', size=11)
             pdf.set_text_color(200, 0, 0)
-            pdf.cell(200, 8, txt="მევალეების სია:", ln=True)
+            pdf.cell(0, 10, "მევალეების სია:", ln=True)
+            
+            # ცხრილის თავფურცელი
+            pdf.set_font('DejaVu', size=9)
+            pdf.set_fill_color(255, 230, 230)
+            pdf.cell(50, 8, "სახელი გვარი", 1, 0, 'C', True)
+            pdf.cell(35, 8, "პირადი №", 1, 0, 'C', True)
+            pdf.cell(30, 8, "ტელეფონი", 1, 0, 'C', True)
+            pdf.cell(25, 8, "ვალი", 1, 0, 'C', True)
+            pdf.cell(50, 8, "შენიშვნა", 1, 1, 'C', True)
+            
+            pdf.set_text_color(0, 0, 0)
             for _, r in debtors.iterrows():
-                line = f"{r['სახელი გვარი']} | ID: {r['პირადი ნომერი']} | ტელ: {r['ტელეფონი']} | ვალი: {r['ვალები']} | შენიშვნა: {r['შენიშვნა']}"
-                pdf.multi_cell(0, 7, txt=line)
-            pdf.cell(0, 8, txt=f"ჯამური ვალი: {debtors['ვალები'].sum():.2f}", ln=True)
+                pdf.cell(50, 7, str(r['სახელი გვარი'])[:25], 1)
+                pdf.cell(35, 7, str(r['პირადი ნომერი']), 1)
+                pdf.cell(30, 7, str(r['ტელეფონი']), 1)
+                pdf.cell(25, 7, f"{r['ვალები']}", 1)
+                pdf.cell(50, 7, str(r['შენიშვნა'])[:30], 1, 1)
+            
+            pdf.set_font('DejaVu', size=10)
+            pdf.cell(0, 8, f"პროექტის ჯამური ვალი: {debtors['ვალები'].sum():,.2d}", ln=True)
 
-        # ავანსები
+        # 2. ავანსები (მწვანე ცხრილი)
         advances = proj_df[proj_df['ავანსები'] > 0]
         if not advances.empty:
             pdf.ln(5)
             pdf.set_text_color(0, 120, 0)
-            pdf.cell(200, 8, txt="ავანსების სია:", ln=True)
+            pdf.cell(0, 10, "ავანსების სია:", ln=True)
+            
+            pdf.set_font('DejaVu', size=9)
+            pdf.set_fill_color(230, 255, 230)
+            pdf.cell(70, 8, "სახელი გვარი", 1, 0, 'C', True)
+            pdf.cell(50, 8, "პირადი №", 1, 0, 'C', True)
+            pdf.cell(40, 8, "ავანსი", 1, 1, 'C', True)
+            
+            pdf.set_text_color(0, 0, 0)
             for _, r in advances.iterrows():
-                line = f"{r['სახელი გვარი']} | ID: {r['პირადი ნომერი']} | ავანსი: {r['ავანსები']}"
-                pdf.cell(0, 7, txt=line, ln=True)
+                pdf.cell(70, 7, str(r['სახელი გვარი'])[:35], 1)
+                pdf.cell(50, 7, str(r['პირადი ნომერი']), 1)
+                pdf.cell(40, 7, f"{r['ავანსები']}", 1, 1)
 
     return pdf.output()
 
 # --- Streamlit UI ---
-st.title("📂 Accounting & Data Matching Tool")
+st.title("📊 Accounting Management By A/C")
 
-f_debt = st.file_uploader("ატვირთეთ prnValiSagad1.csv", type=['csv'])
-f_phone = st.file_uploader("ატვირთეთ valebi.csv", type=['csv'])
+f1 = st.file_uploader("ატვირთეთ prnValiSagad1.csv", type=['csv'])
+f2 = st.file_uploader("ატვირთეთ valebi.csv", type=['csv'])
 
-if f_debt and f_phone:
-    df1 = pd.read_csv(f_debt)
-    df2 = pd.read_csv(f_phone)
+if f1 and f2:
+    df1 = pd.read_csv(f1)
+    df2 = pd.read_csv(f2)
     
-    # ავანსების დამუშავება
-    # ავანსების დამუშავების უფრო უსაფრთხო გზა
+    # ავანსების გასუფთავება
     if 'ავანსები' in df1.columns:
-        # ჯერ ვასუფთავებთ ფრჩხილებისგან, მერე ვცვლით ცარიელებს 0-ით
         df1['ავანსები'] = df1['ავანსები'].astype(str).str.replace(r'[\(\)]', '', regex=True)
         df1['ავანსები'] = pd.to_numeric(df1['ავანსები'], errors='coerce').fillna(0)
     
-    # იერარქიული დამუშავება
-    with st.spinner('მიმდინარეობს ძებნა (სახელების მსგავსება + ID)...'):
+    # მონაცემების დამუშავება
+    with st.spinner('მონაცემები ჯამდება და ხდება იდენტიფიცირება...'):
         df1[['ტელეფონი', 'შენიშვნა']] = df1.apply(lambda row: pd.Series(match_phone(row, df2)), axis=1)
     
-    st.subheader("🔍 შედეგების წინასწარი ნახვა")
-    st.dataframe(df1, use_container_width=True)
-    
-    # ჯამების მომზადება
-    summary = {}
+    # პროექტების სტატისტიკა შეჯამებისთვის
+    summary_data = {}
     for p in df1['პროექტის დასახელება'].unique():
-        sub = df1[df1['პროექტის დასახელება'] == p]
-        summary[p] = {'debts': sub['ვალები'].sum(), 'adv': sub['ავანსები'].sum()}
+        p_sub = df1[df1['პროექტის დასახელება'] == p]
+        summary_data[p] = {'debts': p_sub['ვალები'].sum(), 'adv': p_sub['ავანსები'].sum()}
 
-    if st.button("📄 PDF რეპორტის გენერირება"):
-        pdf_bytes = generate_pdf(df1, summary)
-        st.download_button("📥 ჩამოტვირთვა", data=pdf_bytes, file_name="Report_AC.pdf", mime="application/pdf")
+    st.subheader("📋 წინასწარი გადახედვა (Preview)")
+    st.dataframe(df1)
+
+    if st.button("🖨️ PDF დოკუმენტის გენერირება"):
+        pdf_bytes = generate_pdf(df1, summary_data)
+        st.download_button("📥 ჩამოტვირთეთ ფაილი", data=pdf_bytes, file_name="Accounting_Report_AC.pdf", mime="application/pdf")
