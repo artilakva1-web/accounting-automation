@@ -119,8 +119,11 @@ if f_debt and f_phone:
     df2 = pd.read_csv(f_phone)
     
     # ავანსების დამუშავება
+    # ავანსების დამუშავების უფრო უსაფრთხო გზა
     if 'ავანსები' in df1.columns:
-        df1['ავანსები'] = df1['ავანსები'].astype(str).apply(lambda x: re.sub(r'[\(\)]', '', x)).replace('nan', '0').astype(float)
+        # ჯერ ვასუფთავებთ ფრჩხილებისგან, მერე ვცვლით ცარიელებს 0-ით
+        df1['ავანსები'] = df1['ავანსები'].astype(str).str.replace(r'[\(\)]', '', regex=True)
+        df1['ავანსები'] = pd.to_numeric(df1['ავანსები'], errors='coerce').fillna(0)
     
     # იერარქიული დამუშავება
     with st.spinner('მიმდინარეობს ძებნა (სახელების მსგავსება + ID)...'):
