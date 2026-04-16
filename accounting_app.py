@@ -302,9 +302,8 @@ def generate_pdf(df):
     # fpdf2-ში bytes() აღარ გჭირდებათ
     return pdf.output()
 
-        # Thin top bar
         self.set_fill_color(*NAVY)
-        self.rect(0, 0, 210, 12, 'F')
+    self.rect(0, 0, 210, 12, 'F')
 
         self._sf(7)
         self.set_text_color(*GOLD)
